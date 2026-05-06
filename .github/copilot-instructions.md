@@ -1,110 +1,64 @@
-# GitHub Copilot Instructions
+# Copilot instructions for COBRA / VIPER
 
-This repository contains prompt files to help with common development tasks using GitHub Copilot.
+This repository contains COBRA, a Python video-analysis library and FastAPI backend, plus VIPER, an optional Next.js UI. Keep changes aligned with the real-service local testing and Azure Container Apps deployment flows documented in `README.md` and `LOCAL_TESTING.md`.
 
-## Available Prompts
+## Non-negotiables
 
-### Application Creation
-- **Python App**: `/newPythonApp` - Create a new Python FastAPI application with uv package manager under src/
-- **Node.js/TypeScript App**: `/newNodeApp` - Create a new Node.js/TypeScript Express application under src/
-- **.NET Web API**: `/newDotNetApp` - Create a new ASP.NET Core Web API application with .NET 9 under src/
-- **React App**: `/newReactApp` - Create a new React + Vite + Tailwind CSS application under src/
-- **Gradio App**: `/newGradioApp` - Create a new Gradio application for interactive UIs and AI demos under src/
-- **Streamlit App**: `/newStreamlitApp` - Create a new Streamlit application for data science UIs and AI demos under src/
-- **Agent App**: `/newAgentApp` - Create a new AI agent application using Microsoft Agent Framework under src/
+- Do not add stubs, fake model responses, or mock analysis paths to product code or documentation. Local validation must call real preprocessing, real Azure Speech when transcripts are enabled, and real Azure OpenAI.
+- Prefer Entra ID authentication. Keep API keys optional and never require keys when managed identity or developer credentials can be used.
+- Do not commit `.env`, generated videos, local analysis outputs, Bicep build output, secrets, tenant IDs, subscription IDs, customer names, or environment-specific resource names.
+- Preserve `VideoClient(upload_to_azure=False)` as a local-only mode that does not initialize Storage or Search unless remote blob input requires Storage.
 
-### Infrastructure & Configuration
-- **Setup Infrastructure**: `/setupInfra` - Configure main.bicep with all relevant Azure modules
-- **Add AZD Service**: `/addAzdService` - Add a new service configuration to azure.yaml
-- **Check AZD Compliance**: `/checkAzdCompliance` - Validate Azure Developer CLI configuration and Bicep compliance
+## Architecture notes
 
-### Best Practices Documentation
-- **[Azure Best Practices](azure-bestpractices.md)** - Security guidelines enforcing zero API keys policy
-- **[Bicep Deployment Best Practices](bicep-deployment-bestpractices.md)** - Infrastructure as Code guidelines for azd integration
+- Python package and FastAPI backend live under `src/cobrapy`.
+- Next.js UI lives under `src/ui`.
+- Azure deployment is driven by `azure.yaml`, `infra/main.bicep`, and `azure/containerapps.bicep`.
+- Local MP4 validation uses `scripts/run_local_video_analysis.py` and `samples/cobra_sample_usage.ipynb`.
+- Generated local artifacts belong under `outputs/` or `samples/local-test/`, both ignored by git.
 
-### Documentation & Compliance
-- **Create README**: `/newReadme` - Generate a comprehensive README with standard IP structure
-- **IP Compliance**: `/ipCompliance` - Comprehensive compliance assessment for Azure Developer CLI templates
+## Azure authentication patterns
 
-## Usage
+- Reuse `src/cobrapy/azure_credentials.py` for Azure SDK credentials.
+- The credential chain should support local development and Azure hosting: Azure Developer CLI, Azure CLI, then managed identity.
+- Azure OpenAI uses `azure_ad_token_provider` when `AZURE_OPENAI_GPT_VISION_API_KEY` is blank.
+- Azure Speech managed identity auth requires `AZURE_SPEECH_RESOURCE_ID` and formats tokens as `aad#<resourceId>#<token>`.
+- Deployment-time BYO AI RBAC is handled in `azure.yaml` postprovision hooks using `AZURE_OPENAI_GPT_VISION_RESOURCE_ID` and `AZURE_SPEECH_RESOURCE_ID`.
 
-Type the prompt command in any chat or inline chat session with GitHub Copilot to execute the corresponding task.
+## Audio and video processing
 
-Examples:
+- Extract audio for Speech as WAV PCM: `pcm_s16le`, mono, 16 kHz, `-f wav`.
+- Do not reintroduce MP3 extraction for Speech SDK file transcription.
+- Keep FFmpeg and ffprobe prerequisite checks explicit in user-facing local test paths.
+
+## Deployment conventions
+
+- Use `azd env set --file .env` before `azd up`, `azd provision`, or `azd deploy`.
+- Keep full-stack deployment as the default.
+- Preserve backend-only deployment with `ENABLE_FRONTEND=false`, `azd provision`, and `azd deploy backend`.
+- Leave Cosmos disabled by default unless runtime code starts depending on it.
+- Keep first-run ACR bootstrap safe: provision with placeholder images, configure Container Apps registry after identities/RBAC exist, then deploy real images.
+
+## Validation
+
+Run the narrowest checks that cover the change, and prefer these existing commands:
+
+```powershell
+python -m pytest -q
+az bicep build --file infra\main.bicep
+docker build -f Dockerfile.backend -t viper-backend-localcheck .
+docker build -f Dockerfile.frontend -t viper-frontend-localcheck .
+python scripts\run_local_video_analysis.py --help
 ```
-/newPythonApp
-/newNodeApp
-/newDotNetApp
-/newReactApp
-/newGradioApp
-/newStreamlitApp
-/newAgentApp
-/setupInfra
-/addAzdService
-/checkAzdCompliance
-/newReadme
-/ipCompliance
-```
 
-## Prompt Files Location
+For deployed frontend smoke tests, unauthenticated expected behavior is:
 
-All prompt files are located in `.github/prompts/` directory:
-- `newPythonApp.prompt.md` - Python FastAPI application creation
-- `newNodeApp.prompt.md` - Node.js/TypeScript Express application creation
-- `newDotNetApp.prompt.md` - ASP.NET Core Web API application creation
-- `newReactApp.prompt.md` - React + Vite + Tailwind CSS application creation
-- `newGradioApp.prompt.md` - Gradio application creation for interactive UIs
-- `newStreamlitApp.prompt.md` - Streamlit application creation for data science UIs
-- `newAgentApp.prompt.md` - Microsoft Agent Framework application creation
-- `setupInfra.prompt.md` - Infrastructure setup with Bicep
-- `addAzdService.prompt.md` - Azure Developer CLI service configuration
-- `checkAzdCompliance.prompt.md` - Azure Developer CLI compliance validation
-- `newReadme.prompt.md` - README file generation
-- `ipCompliance.prompt.md` - IP compliance validation and assessment
+- `/login` returns HTTP 200 and renders the sign-in form.
+- `/api/auth/session` returns HTTP 200 with `{}`.
+- `/dashboard` redirects to sign-in.
 
-## Customization
+## Documentation
 
-Each prompt file can be customized to match your specific project requirements and coding standards. The prompts are designed to work with the existing repository structure and Azure infrastructure templates.
-
-## Development Standards
-
-When using these prompts, ensure adherence to the following standards:
-
-### Logging & Error Handling
-- **Logging**: Always use proper logging modules (Python's `logging`, Node.js `winston`) - never use `print()` or `console.log()` in production code
-- **Structured Logging**: Use JSON format for production environments with appropriate log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- **Error Handling**: Implement structured error handling with meaningful error messages and proper exception handling
-- **Observability**: Include OpenTelemetry tracing for distributed systems and performance monitoring
-
-### Code Quality & Security
-- **Type Safety**: Use TypeScript for Node.js/React applications and type hints throughout Python code
-- **Linting & Formatting**: Configure ESLint/Prettier for TypeScript, Ruff/Black for Python
-- **Testing**: Include comprehensive test coverage with Jest (Node.js/React) or pytest (Python)
-- **Security**: Implement security best practices including input validation, sanitization, and proper authentication
-- **Dependency Management**: Use safe version pinning (>= and < operators) to prevent major version upgrades
-
-### Azure Integration
-- **Authentication**: Use ChainedTokenCredential with AzureDeveloperCliCredential + ManagedIdentityCredential pattern
-- **Environment Variables**: Always include `AZURE_CLIENT_ID` for managed identity authentication in Azure Container Apps
-- **Configuration**: Always update `azure.yaml` when creating new applications to ensure proper deployment configuration
-- **Infrastructure**: Update `infra/main.bicep` with new container app modules and proper parameter configuration
-- **Monitoring**: Integrate Application Insights with OpenTelemetry for comprehensive observability
-- **Security**: **NEVER use API keys** - follow [Azure Best Practices](./azure-bestpractices.md) for secure authentication
-
-### Containerization
-- **Multi-stage Builds**: Use optimized Dockerfiles with multi-stage builds for smaller production images
-- **Base Images**: Use Azure Linux base images (mcr.microsoft.com/azurelinux/base/*)
-- **Security**: Run containers as non-root user with proper health checks
-- **Port Configuration**: Use port 80 for Azure Container Apps deployment
-
-### Development Experience
-- **Package Managers**: Use uv for Python, npm for Node.js/React applications
-- **Environment Management**: Include .python-version (Python) and .nvmrc (Node.js) files
-- **Documentation**: Provide comprehensive README files with setup, configuration, and deployment instructions
-- **Git Workflow**: Create feature branches with descriptive names (feature/add-{app-name})
-
-### Application Architecture
-- **Clean Structure**: Follow modular architecture with clear separation of concerns
-- **Configuration Management**: Use pydantic-settings (Python) or environment-based config (Node.js)
-- **API Design**: Follow RESTful principles with proper HTTP status codes and error responses
-- **Performance**: Implement caching strategies and async patterns where appropriate
+- Update `README.md` for broad setup, architecture, deployment, and validation changes.
+- Update `LOCAL_TESTING.md` for local MP4 workflow changes.
+- Keep examples generic and free of tenant/resource/customer-specific values.
