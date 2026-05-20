@@ -3,12 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const DEFAULT_THEME = {
-  backgroundColor: "#f1f5f9",
-  surfaceColor: "#ffffff",
+  backgroundColor: "#e0f2fe",
+  surfaceColor: "#f8fafc",
   primaryColor: "#2563eb",
-  accentColor: "#0f172a",
+  accentColor: "#0ea5e9",
   textColor: "#0f172a",
-  mutedTextColor: "#64748b",
+  mutedTextColor: "#475569",
   logoDataUrl: null,
 };
 
