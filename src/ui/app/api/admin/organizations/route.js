@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canManageOrganizations, canViewAllContent } from "@/lib/rbac";
 
@@ -28,7 +27,7 @@ function generateOrganizationSlug(name) {
 }
 
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id || !canManageOrganizations(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentSession } from "@/lib/auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canManageCollections, canViewAllContent } from "@/lib/rbac";
 import { userCanManageCollection } from "@/lib/access";
@@ -16,7 +15,7 @@ const membershipSchema = z.object({
 });
 
 export async function POST(request, { params }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id || !canManageCollections(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

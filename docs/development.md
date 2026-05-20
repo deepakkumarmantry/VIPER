@@ -26,7 +26,7 @@ Main endpoints:
 
 ## VIPER UI
 
-The UI is optional for backend-only COBRA work. It requires PostgreSQL and NextAuth settings.
+The UI is optional for backend-only COBRA work. It requires PostgreSQL. Use `VIPER_AUTH_MODE=anonymous` only for local non-production smoke testing, or test EasyAuth after deploying to Azure Container Apps.
 
 ```powershell
 Set-Location src\ui
@@ -75,11 +75,11 @@ Unauthenticated smoke:
 
 | Path | Expected |
 | --- | --- |
-| `/login` | HTTP 200 and rendered sign-in form |
-| `/api/auth/session` | HTTP 200 with `{}` |
-| `/dashboard` | Redirect to sign-in |
+| `/login` | HTTP 200 and rendered Entra ID sign-in prompt |
+| `/api/auth/session` | HTTP 410 because NextAuth credentials are disabled |
+| `/dashboard` | Redirect to `/.auth/login/aad` |
 
-Authenticated dashboard testing requires seeded or known UI credentials.
+Authenticated dashboard testing requires a valid Entra user and a mapped VIPER role. Set `VIPER_ADMIN_EMAILS` before deployment to bootstrap platform admins.
 
 ## Hygiene checks
 

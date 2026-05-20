@@ -22,11 +22,21 @@ param frontendEnvVars object = {}
 @description('Optional override for the Viper UI base URL that points to the Viper backend.')
 param frontendBaseUrl string = ''
 
-@description('Optional externally visible Viper UI URL. When blank, the Container App FQDN is used for NextAuth.')
-param nextAuthUrl string = ''
-
 @description('Provision the Viper frontend container app.')
 param enableFrontend bool = true
+
+@description('Enable Azure Container Apps EasyAuth on the Viper frontend.')
+param frontendEasyAuthEnabled bool = false
+
+@description('Entra app registration client ID used by Container Apps EasyAuth.')
+param frontendEasyAuthClientId string = ''
+
+@secure()
+@description('Entra app registration client secret used by Container Apps EasyAuth.')
+param frontendEasyAuthClientSecret string = ''
+
+@description('Optional Entra OpenID issuer override. Leave blank to use the deployment tenant.')
+param frontendEasyAuthOpenIdIssuer string = ''
 
 @description('Name of the virtual network that hosts the Container Apps environment and private endpoints.')
 param virtualNetworkName string
@@ -501,7 +511,8 @@ resource cosmosPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDn
 var backendInternalUrl = format('https://{0}.internal.{1}', backendContainerAppName, managedEnvironment.properties.defaultDomain)
 var resolvedBackendBaseUrl = empty(frontendBaseUrl) ? backendInternalUrl : frontendBaseUrl
 var frontendPublicUrl = format('https://{0}.{1}', frontendContainerAppName, managedEnvironment.properties.defaultDomain)
-var resolvedNextAuthUrl = empty(nextAuthUrl) ? frontendPublicUrl : nextAuthUrl
+var easyAuthSecretName = 'microsoft-provider-authentication-secret'
+var resolvedEasyAuthIssuer = empty(frontendEasyAuthOpenIdIssuer) ? '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0' : frontendEasyAuthOpenIdIssuer
 
 var backendEnv = [for envVar in items(backendEnvVars): {
   name: envVar.key
@@ -517,10 +528,6 @@ var frontendBaseEnv = [
     name: 'VIPER_BACKEND_INTERNAL_URL'
     value: backendInternalUrl
   }
-  {
-    name: 'NEXTAUTH_URL'
-    value: resolvedNextAuthUrl
-  }
 ]
 
 var frontendAdditionalEnv = [for envVar in items(frontendEnvVars): {
@@ -529,6 +536,13 @@ var frontendAdditionalEnv = [for envVar in items(frontendEnvVars): {
 }]
 
 var frontendEnv = concat(frontendBaseEnv, frontendAdditionalEnv)
+var configureFrontendEasyAuth = enableFrontend && frontendEasyAuthEnabled && !empty(frontendEasyAuthClientId) && !empty(frontendEasyAuthClientSecret)
+var frontendSecrets = configureFrontendEasyAuth ? [
+  {
+    name: easyAuthSecretName
+    value: frontendEasyAuthClientSecret
+  }
+] : []
 
 var registryServer = '${acrName}.azurecr.io'
 var containerAppRegistries = configureAcrRegistry ? [
@@ -616,6 +630,7 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = if (enableFronte
           }
         ]
       }
+      secrets: frontendSecrets
       registries: containerAppRegistries
     }
     template: {
@@ -634,6 +649,35 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = if (enableFronte
   }
 }
 
+resource frontendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (configureFrontendEasyAuth) {
+  parent: frontendApp
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureactivedirectory'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: frontendEasyAuthClientId
+          clientSecretSettingName: easyAuthSecretName
+          openIdIssuer: resolvedEasyAuthIssuer
+        }
+        validation: {
+          allowedAudiences: [
+            frontendEasyAuthClientId
+          ]
+        }
+      }
+    }
+  }
+}
+
 resource backendAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(resourceGroup().id, backendApp.name, acrPullRoleGuid)
   scope: acr
@@ -644,10 +688,10 @@ resource backendAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2
 }
 
 resource frontendAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableFrontend) {
-  name: guid(resourceGroup().id, frontendApp.name, acrPullRoleGuid)
+  name: guid(resourceGroup().id, frontendApp!.name, acrPullRoleGuid)
   scope: acr
   properties: {
-    principalId: frontendApp.identity.principalId
+    principalId: frontendApp!.identity.principalId
     roleDefinitionId: acrPullRoleDefinitionId
   }
 }
@@ -662,8 +706,8 @@ var backendStorageRoleAssignments = [
 
 var frontendStorageRoleAssignments = enableFrontend ? [
   {
-    name: guid(resolvedStorageAccountName, frontendApp.name, storageRoleGuid)
-    principalId: frontendApp.identity.principalId
+    name: guid(resolvedStorageAccountName, frontendApp!.name, storageRoleGuid)
+    principalId: frontendApp!.identity.principalId
     roleDefinitionId: storageRoleDefinitionId
   }
 ] : []
@@ -680,8 +724,8 @@ var backendSearchRoleAssignments = [
 
 var frontendSearchRoleAssignments = enableFrontend ? [
   {
-    name: guid(resolvedSearchServiceName, frontendApp.name, searchRoleGuid)
-    principalId: frontendApp.identity.principalId
+    name: guid(resolvedSearchServiceName, frontendApp!.name, searchRoleGuid)
+    principalId: frontendApp!.identity.principalId
     roleDefinitionId: searchRoleDefinitionId
   }
 ] : []
@@ -698,8 +742,8 @@ var backendCosmosRoleAssignments = [
 
 var frontendCosmosRoleAssignments = enableFrontend ? [
   {
-    name: guid(resolvedCosmosAccountName, frontendApp.name, cosmosRoleGuid)
-    principalId: frontendApp.identity.principalId
+    name: guid(resolvedCosmosAccountName, frontendApp!.name, cosmosRoleGuid)
+    principalId: frontendApp!.identity.principalId
     roleDefinitionId: cosmosRoleDefinitionId
   }
 ] : []

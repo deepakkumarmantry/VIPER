@@ -11,6 +11,7 @@ This directory contains infrastructure-as-code assets for deploying the Viper ba
   - An Azure Container Apps managed environment integrated with a private virtual network.
   - Two container apps (backend and frontend) that pull images from an Azure Container Registry (ACR).
   - Private ingress for the backend and HTTPS-only public ingress for the frontend. The template automatically injects secure defaults for the UI so it communicates with the backend over the Container Apps internal domain via TLS.
+  - Optional Container Apps EasyAuth on the frontend when Entra app registration values are supplied by azd parameters.
 - A virtual network with dedicated subnets for Container Apps infrastructure, dedicated workload profiles, and private endpoints.
 - Configures a dedicated Container Apps workload profile so dedicated SKUs can be used without subnet delegation conflicts. You can disable the dedicated profile to run on the Consumption plan when premium capacity is not required.
 - Supports bring-your-own networking scenarios. Set `createVirtualNetwork` to `false` and provide the subnet resource IDs to deploy into an existing network without redeclaring subnets that are already delegated.
@@ -19,7 +20,7 @@ This directory contains infrastructure-as-code assets for deploying the Viper ba
 - A Storage account, Azure AI Search service, and Azure Cosmos DB account (unless existing resources are supplied) with public network access disabled and private endpoints wired into the virtual network.
   - System-assigned managed identities for both container apps. The identities are granted `AcrPull`, `Storage Blob Data Contributor`, `Search Index Data Contributor`, and `Cosmos DB Built-in Data Contributor` so the workloads can manage data without access keys.
 
-Both container apps accept additional environment variables through the `backendEnvVars` and `frontendEnvVars` parameters. These are typically populated by the deployment script from the repository `.env` file. The deployment additionally injects a `VIPER_BACKEND_INTERNAL_URL` variable so workloads that need the Container Apps-only endpoint can access it explicitly. For database access, the script resolves the cloud `DATABASE_URL` from `config/database_urls.json` (or the `-CloudDatabaseUrl` parameter) so publishing to Azure consistently targets the production Viper database regardless of local overrides.
+Both container apps accept additional environment variables through the `backendEnvVars` and `frontendEnvVars` parameters. These are typically populated by azd from the repository `.env` file. The deployment additionally injects a `VIPER_BACKEND_INTERNAL_URL` variable so workloads that need the Container Apps-only endpoint can access it explicitly. For full-stack UI database access, supply `DATABASE_URL` or set `CREATE_POSTGRES=true` in the azd environment.
 
 
 ### Azure environment configuration
@@ -31,14 +32,13 @@ Leaving entries blank skips the associated role assignment. When a resource grou
 ## Deployment workflow
 
 
-1. Deploy to Azure by executing `scripts/Deploy-ViperToAzure.ps1`. At a minimum provide your Azure subscription, target resource group, and region:
+1. Deploy to Azure with Azure Developer CLI:
 
    ```powershell
-   ./scripts/Deploy-ViperToAzure.ps1 \
-       -SubscriptionId "00000000-0000-0000-0000-000000000000" \
-       -ResourceGroupName "viper-prod" \
-
-       -Location "eastus"
+   Copy-Item ..\sample.env ..\.env
+   # Edit ..\.env, then:
+   azd env set --file ..\.env
+   azd up --no-prompt
    ```
 
    The script will:
@@ -49,7 +49,7 @@ Leaving entries blank skips the associated role assignment. When a resource grou
    - Bootstrap the Azure AI Search index schema, create a query API key, and inject the required environment variables into the deployed containers.
    - Print the public FQDN for the frontend application when deployment completes.
 
-   By default the script ensures you are authenticated against the `16b3c013-d300-468d-ac64-7eda0820b6d3` Azure AD tenant before continuing. Use the optional `-TenantId` parameter if you need to override this behaviour.
+   Use tenant-isolated Azure CLI and azd configuration before running deployment commands when working across multiple tenants.
 
 ### Customisation options
 
@@ -61,4 +61,3 @@ To override the URL that the frontend uses to reach the backend in Azure, set `V
 ## Container image hardening
 
 The published Dockerfiles run the backend and frontend processes as non-root service accounts and strip development dependencies after builds. These hardened images are what get published to Azure Container Registry by the deployment script.
-

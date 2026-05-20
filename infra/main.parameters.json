@@ -71,8 +71,38 @@
     "databaseUrl": {
       "value": "${DATABASE_URL}"
     },
-    "nextauthSecret": {
-      "value": "${NEXTAUTH_SECRET}"
+    "viperAuthMode": {
+      "value": "${VIPER_AUTH_MODE}"
+    },
+    "viperAdminEmails": {
+      "value": "${VIPER_ADMIN_EMAILS}"
+    },
+    "frontendEasyAuthEnabled": {
+      "value": "${FRONTEND_EASYAUTH_ENABLED}"
+    },
+    "frontendEasyAuthClientId": {
+      "value": "${FRONTEND_EASYAUTH_CLIENT_ID}"
+    },
+    "frontendEasyAuthClientSecret": {
+      "value": "${FRONTEND_EASYAUTH_CLIENT_SECRET}"
+    },
+    "frontendEasyAuthOpenIdIssuer": {
+      "value": "${FRONTEND_EASYAUTH_OPENID_ISSUER}"
+    },
+    "createPostgres": {
+      "value": "${CREATE_POSTGRES}"
+    },
+    "postgresServerName": {
+      "value": "${POSTGRES_SERVER_NAME}"
+    },
+    "postgresAdministratorLogin": {
+      "value": "${POSTGRES_ADMINISTRATOR_LOGIN}"
+    },
+    "postgresAdministratorPassword": {
+      "value": "${POSTGRES_ADMINISTRATOR_PASSWORD}"
+    },
+    "postgresDatabaseName": {
+      "value": "${POSTGRES_DATABASE_NAME}"
     }
   }
 }

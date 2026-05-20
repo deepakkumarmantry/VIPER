@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canUploadContent } from "@/lib/rbac";
 import { buildCollectionAccessWhere } from "@/lib/access";
@@ -752,7 +751,7 @@ async function processFileUpload({
 }
 
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id || !canUploadContent(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

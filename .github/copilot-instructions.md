@@ -53,9 +53,9 @@ python scripts\run_local_video_analysis.py --help
 
 For deployed frontend smoke tests, unauthenticated expected behavior is:
 
-- `/login` returns HTTP 200 and renders the sign-in form.
-- `/api/auth/session` returns HTTP 200 with `{}`.
-- `/dashboard` redirects to sign-in.
+- `/login` returns HTTP 200 and renders the Entra ID sign-in prompt.
+- `/api/auth/session` returns HTTP 410 because NextAuth credentials are disabled.
+- `/dashboard` redirects to `/.auth/login/aad`.
 
 ## Documentation
 

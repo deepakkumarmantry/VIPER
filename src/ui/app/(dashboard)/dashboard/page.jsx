@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCurrentSession, getLoginUrl } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import DashboardView from "@/components/dashboard/dashboard-view";
 import {
@@ -12,10 +11,10 @@ import {
 import { serializeCollections } from "@/lib/serialization";
 
 export default async function DashboardPage({ searchParams }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id) {
-    redirect("/login");
+    redirect(getLoginUrl("/dashboard"));
   }
 
   const canSeeAllContent = canViewAllContent(session.user.role);

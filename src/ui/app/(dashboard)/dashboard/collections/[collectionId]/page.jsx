@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
 
-import { authOptions } from "@/lib/auth";
+import { getCurrentSession, getLoginUrl } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { buildCollectionAccessWhere } from "@/lib/access";
 import { canDeleteCollection } from "@/lib/rbac";
@@ -9,10 +8,10 @@ import { serializeCollection } from "@/lib/serialization";
 import CollectionOverview from "@/components/dashboard/collection-overview";
 
 export default async function CollectionPage({ params }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id) {
-    redirect("/login");
+    redirect(getLoginUrl(`/dashboard/collections/${params?.collectionId || ""}`));
   }
 
   const collectionId = params?.collectionId;

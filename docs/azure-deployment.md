@@ -9,7 +9,7 @@ Deploy COBRA/VIPER with Azure Developer CLI (`azd`). Azure deployment is the pri
 | Backend-only | COBRA FastAPI backend, Container Apps environment, ACR, Storage, Search | The caller will integrate directly with the COBRA API |
 | Full stack | Backend-only resources plus the VIPER Next.js UI | Users need the browser UI, auth, and UI state |
 
-Backend-only is the preferred first milestone for a new tenant because it avoids UI-only requirements such as `DATABASE_URL` and `NEXTAUTH_SECRET`.
+Backend-only is the preferred first milestone for a new tenant because it avoids UI-only requirements such as EasyAuth app registration and PostgreSQL.
 
 ## Prerequisites
 
@@ -98,12 +98,30 @@ azd up --no-prompt
 Full-stack deployment also needs UI runtime values:
 
 ```text
+VIPER_AUTH_MODE="easyauth"
+VIPER_ADMIN_EMAILS="<admin1@contoso.com,admin2@contoso.com>"
+
+FRONTEND_EASYAUTH_ENABLED="true"
+FRONTEND_EASYAUTH_CLIENT_ID="<entra-app-client-id>"
+FRONTEND_EASYAUTH_CLIENT_SECRET="<entra-app-client-secret>"
+FRONTEND_EASYAUTH_OPENID_ISSUER=
+
+# Choose one database option:
 DATABASE_URL="<postgresql-connection-string>"
-NEXTAUTH_SECRET="<strong-random-secret>"
-NEXTAUTH_URL=
+# or:
+CREATE_POSTGRES="true"
+POSTGRES_ADMINISTRATOR_PASSWORD="<strong-postgresql-password>"
 ```
 
-Leave `NEXTAUTH_URL` blank for Azure deployment so infrastructure uses the frontend Container App URL.
+Container Apps EasyAuth requires an Entra app registration. Configure its redirect URI for the deployed frontend callback:
+
+```text
+https://<frontend-fqdn>/.auth/login/aad/callback
+```
+
+If the frontend FQDN is not known yet, run a first provision with `FRONTEND_EASYAUTH_ENABLED=false` to create the Container App and get `SERVICE_FRONTEND_URL`, add the callback URI to the Entra app registration, then set `FRONTEND_EASYAUTH_ENABLED=true` and redeploy.
+
+When `CREATE_POSTGRES=true`, azd provisions Azure Database for PostgreSQL Flexible Server and the frontend runs `prisma migrate deploy` before starting. Leave `CREATE_POSTGRES=false` when supplying a bring-your-own `DATABASE_URL`.
 
 ## What the deployment creates
 
@@ -112,6 +130,8 @@ Leave `NEXTAUTH_URL` blank for Azure deployment so infrastructure uses the front
 - Azure Container Apps managed environment
 - COBRA backend Container App
 - VIPER frontend Container App when `ENABLE_FRONTEND` is not `false`
+- Container Apps EasyAuth on the frontend when `FRONTEND_EASYAUTH_ENABLED=true`
+- Azure Database for PostgreSQL Flexible Server when `CREATE_POSTGRES=true`
 - Storage Account
 - Azure AI Search
 - Private endpoints and private DNS where configured
@@ -154,16 +174,17 @@ Unauthenticated frontend smoke expectations:
 
 | Path | Expected |
 | --- | --- |
-| `/login` | HTTP 200 and rendered sign-in form |
-| `/api/auth/session` | HTTP 200 with `{}` |
-| `/dashboard` | Redirect to sign-in |
+| `/login` | HTTP 200 and rendered Entra ID sign-in prompt |
+| `/api/auth/session` | HTTP 410 because NextAuth credentials are disabled |
+| `/dashboard` | Redirect to `/.auth/login/aad` when EasyAuth has not authenticated the user |
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Deployed env vars contain literal `$(envOrDefault ...)` | azd env values were not loaded or unsupported parameter syntax was used | Use `${VAR}` in `infra\main.parameters.json` and run `azd env set --file .env` |
-| `NEXTAUTH_URL` invalid in Azure | Local-only or literal value deployed | Leave `NEXTAUTH_URL` blank and redeploy |
+| Frontend redirects to `/.auth/login/aad` but sign-in fails | Missing or incorrect EasyAuth app registration values | Verify `FRONTEND_EASYAUTH_CLIENT_ID`, secret, issuer, and redirect URI |
+| Frontend starts but dashboard database queries fail | Missing UI database or migrations | Supply `DATABASE_URL` or set `CREATE_POSTGRES=true`; the container runs `prisma migrate deploy` at startup |
 | Backend cannot call Azure OpenAI | Wrong tenant context or missing RBAC | Verify isolated Azure login and assign `Cognitive Services OpenAI User` |
 | Speech transcription auth fails | Missing Speech resource ID or RBAC | Set `AZURE_SPEECH_RESOURCE_ID` and assign `Cognitive Services User` |
 | First provision cannot pull private ACR image | Managed identity/RBAC is not ready yet | Keep placeholder-image provision and postprovision registry setup in `azure.yaml` |

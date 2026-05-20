@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { authOptions } from "@/lib/auth";
 import { canManageApprovals, canViewAllContent } from "@/lib/rbac";
 import { userCanManageOrganization } from "@/lib/access";
 
 export async function DELETE(_request, { params }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session?.user?.id || !canManageApprovals(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

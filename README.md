@@ -29,6 +29,7 @@ Minimal flow:
 ```powershell
 Copy-Item sample.env .env
 # Edit .env with Azure OpenAI/Speech settings and deployment choices.
+# For full-stack UI, also set EasyAuth and PostgreSQL values.
 azd env set --file .env
 azd up --no-prompt
 ```

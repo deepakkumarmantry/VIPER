@@ -42,13 +42,26 @@ This overwrites `.env`, which is ignored by git.
 | Variable | Required | Description |
 | --- | --- | --- |
 | `ENABLE_FRONTEND` | Deployment | Set `false` for backend-only deployment |
-| `DATABASE_URL` | UI only | PostgreSQL connection string |
-| `NEXTAUTH_SECRET` | UI only | Strong random secret for NextAuth |
-| `NEXTAUTH_URL` | UI only | Leave blank for Azure; use `http://localhost:3000` for local UI if needed |
+| `VIPER_AUTH_MODE` | UI only | `easyauth` for Azure Container Apps EasyAuth; `anonymous` only for non-production local smoke testing |
+| `VIPER_ADMIN_EMAILS` | UI only | Comma-separated Entra user emails that should receive VIPER `ADMIN` role on sign-in |
+| `FRONTEND_EASYAUTH_ENABLED` | Azure UI | Enable Container Apps EasyAuth for the frontend |
+| `FRONTEND_EASYAUTH_CLIENT_ID` | Azure UI EasyAuth | Entra app registration client ID |
+| `FRONTEND_EASYAUTH_CLIENT_SECRET` | Azure UI EasyAuth | Entra app registration client secret |
+| `FRONTEND_EASYAUTH_OPENID_ISSUER` | No | Optional issuer override; leave blank to use the deployment tenant |
+| `DATABASE_URL` | UI only | Bring-your-own PostgreSQL connection string when `CREATE_POSTGRES` is `false` |
+| `CREATE_POSTGRES` | Azure UI | Set `true` to provision Azure Database for PostgreSQL Flexible Server for the UI |
+| `POSTGRES_SERVER_NAME` | No | Optional PostgreSQL server name override |
+| `POSTGRES_ADMINISTRATOR_LOGIN` | PostgreSQL provisioning | PostgreSQL administrator login |
+| `POSTGRES_ADMINISTRATOR_PASSWORD` | PostgreSQL provisioning | PostgreSQL administrator password |
+| `POSTGRES_DATABASE_NAME` | PostgreSQL provisioning | UI database name |
 | `VIPER_BASE_URL` | Optional | Backend URL for browser/server calls; defaults to local backend in development and backend internal URL in Azure |
 | `VIPER_BACKEND_INTERNAL_URL` | Optional | Internal backend URL override |
 | `AZ_OPENAI_KEY`, `AZ_OPENAI_BASE`, `AZ_OPENAI_VERSION`, `GPT4` | UI features | Legacy UI OpenAI variables used by UI-specific features |
 | `SEARCH_ENDPOINT`, `SEARCH_API_KEY`, `INDEX_NAME` | UI features | UI search variables |
+
+The UI no longer uses database-backed username/password authentication. Entra ID identities are mapped to Prisma `User` records at sign-in so the existing organization, collection, content, and role model still has a persistent store.
+
+For local smoke testing only, set `VIPER_AUTH_MODE=anonymous`. This creates or reuses a real local test user, organization, and collection in the configured PostgreSQL database; it does not mock analysis, Speech, or OpenAI calls.
 
 ## Keyless authentication
 

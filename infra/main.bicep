@@ -40,8 +40,14 @@ param searchServiceName string = ''
 @description('Name of the Azure Cosmos DB account')
 param cosmosAccountName string = ''
 
+@description('Name of the Azure Database for PostgreSQL Flexible Server used by the full-stack UI')
+param postgresServerName string = ''
+
 @description('Create a new Azure Cosmos DB account for manifest storage. Disabled by default because VIPER currently does not use Cosmos at runtime.')
 param createCosmosAccount bool = false
+
+@description('Create Azure Database for PostgreSQL for the full-stack VIPER UI. Ignored when the frontend is disabled.')
+param createPostgres string = 'false'
 
 @description('Provision the Viper frontend container app. Set to false for backend-only COBRA API deployments.')
 param enableFrontend string = 'true'
@@ -117,12 +123,34 @@ param searchApiKey string = ''
 @description('Database connection URL')
 param databaseUrl string = ''
 
-@secure()
-@description('NextAuth secret')
-param nextauthSecret string = ''
+@description('VIPER UI auth mode. Use easyauth for Azure Container Apps EasyAuth, or anonymous only for non-production local smoke testing.')
+param viperAuthMode string = 'easyauth'
 
-@description('NextAuth URL')
-param nextauthUrl string = ''
+@description('Comma-separated list of Entra user emails that should receive VIPER ADMIN role on sign-in.')
+param viperAdminEmails string = ''
+
+@description('Enable Azure Container Apps EasyAuth on the frontend.')
+param frontendEasyAuthEnabled string = 'true'
+
+@description('Entra app registration client ID used by Container Apps EasyAuth.')
+param frontendEasyAuthClientId string = ''
+
+@secure()
+@description('Entra app registration client secret used by Container Apps EasyAuth.')
+param frontendEasyAuthClientSecret string = ''
+
+@description('Optional Entra OpenID issuer override. Leave blank to use the deployment tenant.')
+param frontendEasyAuthOpenIdIssuer string = ''
+
+@description('PostgreSQL administrator login when createPostgres is true.')
+param postgresAdministratorLogin string = 'viperadmin'
+
+@secure()
+@description('PostgreSQL administrator password when createPostgres is true.')
+param postgresAdministratorPassword string = ''
+
+@description('PostgreSQL database name when createPostgres is true.')
+param postgresDatabaseName string = 'viper'
 
 // Tags for all resources
 var tags = {
@@ -153,8 +181,11 @@ var resolvedVirtualNetworkName = !empty(virtualNetworkName) ? virtualNetworkName
 var resolvedStorageAccountName = !empty(storageAccountName) ? storageAccountName : '${abbrs.storageAccount}${resourceToken}'
 var resolvedSearchServiceName = !empty(searchServiceName) ? searchServiceName : '${abbrs.searchService}${resourceToken}'
 var resolvedCosmosAccountName = createCosmosAccount ? (!empty(cosmosAccountName) ? cosmosAccountName : '${abbrs.cosmosAccount}${resourceToken}') : cosmosAccountName
+var resolvedPostgresServerName = !empty(postgresServerName) ? postgresServerName : 'psql-${environmentName}-${resourceToken}'
 var containerAppProvisionImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var deployFrontend = toLower(trim(enableFrontend)) != 'false'
+var deployPostgres = deployFrontend && toLower(trim(createPostgres)) == 'true'
+var deployFrontendEasyAuth = deployFrontend && toLower(trim(frontendEasyAuthEnabled)) == 'true'
 
 // Resource Group
 resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
@@ -177,6 +208,21 @@ module acr 'modules/acr.bicep' = {
 // Compute endpoint URLs (use provided values or generate from resource names)
 var computedStorageAccountUrl = !empty(azureStorageAccountUrl) ? azureStorageAccountUrl : 'https://${resolvedStorageAccountName}.blob.${environment().suffixes.storage}'
 var computedSearchEndpoint = !empty(azureSearchEndpoint) ? azureSearchEndpoint : 'https://${resolvedSearchServiceName}.search.windows.net'
+
+module postgres 'modules/postgres.bicep' = if (deployPostgres) {
+  name: 'postgres'
+  scope: rg
+  params: {
+    name: resolvedPostgresServerName
+    location: location
+    tags: tags
+    administratorLogin: postgresAdministratorLogin
+    administratorPassword: postgresAdministratorPassword
+    databaseName: postgresDatabaseName
+  }
+}
+
+var resolvedDatabaseUrl = deployPostgres ? postgres.outputs.databaseUrl : databaseUrl
 
 // Build environment variables for backend
 var backendEnvVars = {
@@ -208,8 +254,9 @@ var frontendEnvVars = {
   SEARCH_ENDPOINT: computedFrontendSearchEndpoint
   SEARCH_API_KEY: searchApiKey
   INDEX_NAME: searchIndexName
-  DATABASE_URL: databaseUrl
-  NEXTAUTH_SECRET: nextauthSecret
+  DATABASE_URL: resolvedDatabaseUrl
+  VIPER_AUTH_MODE: viperAuthMode
+  VIPER_ADMIN_EMAILS: viperAdminEmails
 }
 
 // Deploy Container Apps infrastructure using existing bicep
@@ -226,8 +273,11 @@ module containerApps '../azure/containerapps.bicep' = {
     backendImage: containerAppProvisionImage
     frontendImage: containerAppProvisionImage
     enableFrontend: deployFrontend
-    nextAuthUrl: nextauthUrl
     tags: tags
+    frontendEasyAuthEnabled: deployFrontendEasyAuth
+    frontendEasyAuthClientId: frontendEasyAuthClientId
+    frontendEasyAuthClientSecret: frontendEasyAuthClientSecret
+    frontendEasyAuthOpenIdIssuer: frontendEasyAuthOpenIdIssuer
     configureAcrRegistry: false
     virtualNetworkName: resolvedVirtualNetworkName
     storageAccountName: resolvedStorageAccountName

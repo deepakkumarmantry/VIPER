@@ -18,7 +18,7 @@ Azure deployment is the primary hosted path. Local validation is a convenience p
 | Azure credentials | `src\cobrapy\azure_credentials.py` | Shared local/deployed Entra credential chain |
 | Local validation runner | `scripts\run_local_video_analysis.py` | Real local MP4 smoke test path |
 | Notebook sample | `samples\cobra_sample_usage.ipynb` | Interactive local validation path |
-| VIPER UI | `src\ui` | Optional Next.js frontend with NextAuth and PostgreSQL-backed UI state |
+| VIPER UI | `src\ui` | Optional Next.js frontend with EasyAuth and PostgreSQL-backed UI state |
 | Azure infrastructure | `infra\main.bicep`, `azure\containerapps.bicep`, `azure.yaml` | Container Apps, ACR, Storage, Search, deployment hooks |
 
 ## Hosted Azure topology
@@ -135,6 +135,10 @@ COBRA prefers keyless Entra ID authentication:
 3. `ManagedIdentityCredential` for Azure Container Apps
 
 Azure OpenAI uses `azure_ad_token_provider` when `AZURE_OPENAI_GPT_VISION_API_KEY` is blank.
+
+VIPER frontend authentication is separate from COBRA service authentication. In Azure, VIPER uses Azure Container Apps EasyAuth with Entra ID. The app reads the EasyAuth `x-ms-client-principal` header, maps the Entra identity to a Prisma `User`, and applies the existing VIPER role model. Password registration and NextAuth Credentials are disabled.
+
+The VIPER UI database is still required for full-stack deployments because it stores users, organizations, memberships, collections, uploaded content metadata, and analysis status. Backend-only COBRA deployments do not require this database.
 
 Azure Speech requires `AZURE_SPEECH_RESOURCE_ID` for keyless auth because the Speech SDK expects authorization tokens in this format:
 

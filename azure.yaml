@@ -19,6 +19,7 @@ services:
     docker:
       path: Dockerfile.backend
       context: .
+      remoteBuild: true
   frontend:
     project: src/ui
     language: js
@@ -26,35 +27,21 @@ services:
     docker:
       path: ../../Dockerfile.frontend
       context: ../..
+      remoteBuild: true
 
 hooks:
-  # Load environment variables from the repository .env file before provisioning
+  # Validate that azd environment values are selected before provisioning.
+  # Use `azd env set --file .env` to import local values; hooks intentionally
+  # avoid sourcing `.env` so stale local files cannot override azd state.
   preprovision:
     posix:
       shell: sh
       run: |
-        if [ -f .env ]; then
-          echo "Loading environment variables from .env"
-          set -a
-          . ./.env
-          set +a
-        fi
+        azd env get-value AZURE_ENV_NAME >/dev/null
     windows:
       shell: pwsh
       run: |
-        if (Test-Path .env) {
-          Write-Host "Loading environment variables from .env"
-          Get-Content .env | ForEach-Object {
-            if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
-              $name = $matches[1].Trim()
-              $value = $matches[2].Trim()
-              if ($value.StartsWith('"') -and $value.EndsWith('"')) {
-                $value = $value.Substring(1, $value.Length - 2)
-              }
-              [Environment]::SetEnvironmentVariable($name, $value, "Process")
-            }
-          }
-        }
+        azd env get-value AZURE_ENV_NAME | Out-Null
 
   # Configure ACR pull after Container Apps identities and role assignments exist.
   # Provision intentionally uses public placeholder images to avoid first-run ACR
@@ -63,14 +50,12 @@ hooks:
     posix:
       shell: sh
       run: |
-        if [ -f .env ]; then
-          set -a
-          . ./.env
-          set +a
-        fi
-
         normalize_resource_id() {
           printf '%s' "$1" | tr -d '"' | xargs
+        }
+
+        get_env_value() {
+          azd env get-value "$1" 2>/dev/null || true
         }
 
         assign_role_if_needed() {
@@ -101,26 +86,13 @@ hooks:
         fi
 
         BACKEND_PRINCIPAL_ID="$(az containerapp show --resource-group "$RG" --name "$BACKEND_APP" --query identity.principalId -o tsv)"
-        assign_role_if_needed "${AZURE_OPENAI_GPT_VISION_RESOURCE_ID:-}" "Cognitive Services OpenAI User"
-        assign_role_if_needed "${AZURE_SPEECH_RESOURCE_ID:-}" "Cognitive Services User"
+        assign_role_if_needed "$(get_env_value AZURE_OPENAI_GPT_VISION_RESOURCE_ID)" "Cognitive Services OpenAI User"
+        assign_role_if_needed "$(get_env_value AZURE_SPEECH_RESOURCE_ID)" "Cognitive Services User"
     windows:
       shell: pwsh
       run: |
-        if (Test-Path .env) {
-          Get-Content .env | ForEach-Object {
-            if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
-              $name = $matches[1].Trim()
-              $value = $matches[2].Trim()
-              if ($value.StartsWith('"') -and $value.EndsWith('"')) {
-                $value = $value.Substring(1, $value.Length - 2)
-              }
-              [Environment]::SetEnvironmentVariable($name, $value, "Process")
-            }
-          }
-        }
-
         function Get-ResourceIdValue([string]$Name) {
-          $value = [Environment]::GetEnvironmentVariable($Name, "Process")
+          $value = azd env get-value $Name 2>$null
           if ([string]::IsNullOrWhiteSpace($value)) {
             return ""
           }
@@ -155,28 +127,13 @@ hooks:
         Set-RoleAssignmentIfNeeded (Get-ResourceIdValue "AZURE_OPENAI_GPT_VISION_RESOURCE_ID") "Cognitive Services OpenAI User"
         Set-RoleAssignmentIfNeeded (Get-ResourceIdValue "AZURE_SPEECH_RESOURCE_ID") "Cognitive Services User"
 
-  # Load environment variables before deployment so containers inherit them
+  # Keep selected azd environment available before deployment.
   predeploy:
     posix:
       shell: sh
       run: |
-        if [ -f .env ]; then
-          set -a
-          . ./.env
-          set +a
-        fi
+        azd env get-value AZURE_ENV_NAME >/dev/null
     windows:
       shell: pwsh
       run: |
-        if (Test-Path .env) {
-          Get-Content .env | ForEach-Object {
-            if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
-              $name = $matches[1].Trim()
-              $value = $matches[2].Trim()
-              if ($value.StartsWith('"') -and $value.EndsWith('"')) {
-                $value = $value.Substring(1, $value.Length - 2)
-              }
-              [Environment]::SetEnvironmentVariable($name, $value, "Process")
-            }
-          }
-        }
+        azd env get-value AZURE_ENV_NAME | Out-Null
