@@ -7,7 +7,7 @@
     "build": "next build",
     "db:deploy": "prisma migrate deploy",
     "start": "next start -p 3000",
-    "start:azure": "prisma migrate deploy && next start -p 3000",
+    "start:azure": "prisma migrate deploy || echo 'Migration skipped or failed, continuing...' && next start -p 3000",
     "lint": "next lint"
   },
   "dependencies": {

@@ -231,6 +231,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-05-01' = if (cre
 resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: managedEnvironmentName
   location: location
+  tags: tags
   properties: {
     appLogsConfiguration: {
       destination: 'log-analytics'

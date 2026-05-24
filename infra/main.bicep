@@ -124,13 +124,13 @@ param searchApiKey string = ''
 param databaseUrl string = ''
 
 @description('VIPER UI auth mode. Use easyauth for Azure Container Apps EasyAuth, or anonymous only for non-production local smoke testing.')
-param viperAuthMode string = 'easyauth'
+param viperAuthMode string = ''
 
 @description('Comma-separated list of Entra user emails that should receive VIPER ADMIN role on sign-in.')
 param viperAdminEmails string = ''
 
 @description('Enable Azure Container Apps EasyAuth on the frontend.')
-param frontendEasyAuthEnabled string = 'true'
+param frontendEasyAuthEnabled string = ''
 
 @description('Entra app registration client ID used by Container Apps EasyAuth.')
 param frontendEasyAuthClientId string = ''
@@ -155,6 +155,13 @@ param postgresDatabaseName string = 'viper'
 // Tags for all resources
 var tags = {
   'azd-env-name': environmentName
+  'SOLUTION OWNER': 'luis_yamada@bat.com'
+  'CHARGING-TYPE': 'Core Platform'
+  'CUST-CODE': 'To Be Filled'
+  'CUST-CODE OWNER': 'omar_vazquez@bat.com'
+  APPLICATION: 'To Be Filled'
+  RFC: 'To Be Filled'
+  ENVIRONMENT: 'Sandbox'
 }
 
 // Generate resource names if not provided

@@ -44,88 +44,15 @@ hooks:
         azd env get-value AZURE_ENV_NAME | Out-Null
 
   # Configure ACR pull after Container Apps identities and role assignments exist.
-  # Provision intentionally uses public placeholder images to avoid first-run ACR
-  # identity bootstrapping issues; deploy then replaces them with real images.
+  # Uses scripts/postprovision.py (AzureDeveloperCliCredential) instead of az CLI
+  # so that az login is not required — azd authentication is sufficient.
   postprovision:
     posix:
       shell: sh
-      run: |
-        normalize_resource_id() {
-          printf '%s' "$1" | tr -d '"' | xargs
-        }
-
-        get_env_value() {
-          azd env get-value "$1" 2>/dev/null || true
-        }
-
-        assign_role_if_needed() {
-          resource_id="$(normalize_resource_id "$1")"
-          role_name="$2"
-          if [ -z "$resource_id" ]; then
-            return 0
-          fi
-
-          existing="$(az role assignment list --assignee "$BACKEND_PRINCIPAL_ID" --role "$role_name" --scope "$resource_id" --query '[0].id' -o tsv)"
-          if [ -z "$existing" ]; then
-            az role assignment create \
-              --assignee-object-id "$BACKEND_PRINCIPAL_ID" \
-              --assignee-principal-type ServicePrincipal \
-              --role "$role_name" \
-              --scope "$resource_id" \
-              --only-show-errors 1>/dev/null
-          fi
-        }
-
-        RG="$(azd env get-value AZURE_RESOURCE_GROUP)"
-        ACR="$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)"
-        BACKEND_APP="$(azd env get-value SERVICE_BACKEND_NAME)"
-        FRONTEND_APP="$(azd env get-value SERVICE_FRONTEND_NAME)"
-        az containerapp registry set --resource-group "$RG" --name "$BACKEND_APP" --server "$ACR" --identity system
-        if [ -n "$FRONTEND_APP" ]; then
-          az containerapp registry set --resource-group "$RG" --name "$FRONTEND_APP" --server "$ACR" --identity system
-        fi
-
-        BACKEND_PRINCIPAL_ID="$(az containerapp show --resource-group "$RG" --name "$BACKEND_APP" --query identity.principalId -o tsv)"
-        assign_role_if_needed "$(get_env_value AZURE_OPENAI_GPT_VISION_RESOURCE_ID)" "Cognitive Services OpenAI User"
-        assign_role_if_needed "$(get_env_value AZURE_SPEECH_RESOURCE_ID)" "Cognitive Services User"
+      run: python scripts/postprovision.py
     windows:
       shell: pwsh
-      run: |
-        function Get-ResourceIdValue([string]$Name) {
-          $value = azd env get-value $Name 2>$null
-          if ([string]::IsNullOrWhiteSpace($value)) {
-            return ""
-          }
-          return $value.Trim().Trim('"')
-        }
-
-        function Set-RoleAssignmentIfNeeded([string]$ResourceId, [string]$RoleName) {
-          if ([string]::IsNullOrWhiteSpace($ResourceId)) {
-            return
-          }
-
-          $existing = az role assignment list --assignee $BACKEND_PRINCIPAL_ID --role $RoleName --scope $ResourceId --query "[0].id" -o tsv
-          if ([string]::IsNullOrWhiteSpace($existing)) {
-            az role assignment create `
-              --assignee-object-id $BACKEND_PRINCIPAL_ID `
-              --assignee-principal-type ServicePrincipal `
-              --role $RoleName `
-              --scope $ResourceId `
-              --only-show-errors | Out-Null
-          }
-        }
-
-        $RG = azd env get-value AZURE_RESOURCE_GROUP
-        $ACR = azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT
-        $BACKEND_APP = azd env get-value SERVICE_BACKEND_NAME
-        $FRONTEND_APP = azd env get-value SERVICE_FRONTEND_NAME
-        az containerapp registry set --resource-group $RG --name $BACKEND_APP --server $ACR --identity system
-        if (-not [string]::IsNullOrWhiteSpace($FRONTEND_APP)) {
-          az containerapp registry set --resource-group $RG --name $FRONTEND_APP --server $ACR --identity system
-        }
-        $BACKEND_PRINCIPAL_ID = az containerapp show --resource-group $RG --name $BACKEND_APP --query identity.principalId -o tsv
-        Set-RoleAssignmentIfNeeded (Get-ResourceIdValue "AZURE_OPENAI_GPT_VISION_RESOURCE_ID") "Cognitive Services OpenAI User"
-        Set-RoleAssignmentIfNeeded (Get-ResourceIdValue "AZURE_SPEECH_RESOURCE_ID") "Cognitive Services User"
+      run: python scripts/postprovision.py
 
   # Keep selected azd environment available before deployment.
   predeploy:
